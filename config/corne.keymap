@@ -9,6 +9,18 @@
  *     Real programmers dv: https://github.com/ThePrimeagen
  *     My qmk config: https://github.com/timonviola/qmk_firmware/tree/master/keyboards/crkbd/keymaps/timon
  *
+ * Layer model:
+ *     BASE is Dvorak + MacOS. QWERTY and LINUX are sparse overlays that stay
+ *     toggled on top of BASE, so the 4 combos are:
+ *         BASE                   dvorak mac
+ *         BASE + QWERTY          qwerty mac
+ *         BASE + LINUX           dvorak linux
+ *         BASE + QWERTY + LINUX  qwerty linux
+ *     OS/layout are set only from MEDIA (&set_*). Never use &to: it would
+ *     wipe the QWERTY/LINUX overlays. Use &home to leave FUN/MEDIA instead.
+ *     NAV_LINUX and MACRO_LINUX are conditional layers: they turn on by
+ *     themselves when NAV/MACRO is active together with LINUX. Never target
+ *     them directly.
  */
 
 #include <behaviors.dtsi>
@@ -17,17 +29,16 @@
 #include <dt-bindings/zmk/outputs.h>
 #include <dt-bindings/zmk/ext_power.h>
 
-#define BASE_MAC 0
-#define BASE 1
-#define NAV 2
-#define NAV_MAC 3
-#define FUN 4
-#define FUN_MAC 5
-#define MACRO 6
-#define MACRO_MAC 7
-#define MEDIA 8
-#define MEDIA_MAC 9
-#define SYM 10
+#define BASE 0
+#define QWERTY 1
+#define LINUX 2
+#define NAV 3
+#define MACRO 4
+#define FUN 5
+#define MEDIA 6
+#define SYM 7
+#define NAV_LINUX 8
+#define MACRO_LINUX 9
 
 #define KEYS_L 0 1 2 3 4 5 12 13 14 15 16 17 24 25 26 27 28 29 36 37 38
 #define KEYS_R 6 7 8 9 10 11 18 19 20 21 22 23 30 31 32 33 34 35 39 40 41
@@ -39,6 +50,18 @@
 };
 
 / {
+    conditional_layers {
+        compatible = "zmk,conditional-layers";
+        nav_linux {
+            if-layers = <NAV LINUX>;
+            then-layer = <NAV_LINUX>;
+        };
+        macro_linux {
+            if-layers = <MACRO LINUX>;
+            then-layer = <MACRO_LINUX>;
+        };
+    };
+
     macros {
         hyper: hyper {
             compatible = "zmk,behavior-macro";
@@ -55,8 +78,61 @@
                 <&macro_tap &kp MACRO_PLACEHOLDER>,
                 <&macro_release &kp LCTRL &kp LSHIFT &kp LALT &kp LGUI>;
         };
+
+        /**
+         * Back to base. Turns off FUN/MEDIA, keeps the QWERTY/LINUX overlays.
+         */
+        home: home {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_off FUN &tog_off MEDIA>;
+        };
+        fun_to_media: fun_to_media {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_on MEDIA &tog_off FUN>;
+        };
+        media_to_fun: media_to_fun {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_on FUN &tog_off MEDIA>;
+        };
+
+        /**
+         * OS + layout selection, used only from MEDIA. Each one also goes home.
+         */
+        set_dv_lin: set_dv_lin {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_off QWERTY &tog_on LINUX &tog_off FUN &tog_off MEDIA>;
+        };
+        set_qw_lin: set_qw_lin {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_on QWERTY &tog_on LINUX &tog_off FUN &tog_off MEDIA>;
+        };
+        set_dv_mac: set_dv_mac {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_off QWERTY &tog_off LINUX &tog_off FUN &tog_off MEDIA>;
+        };
+        set_qw_mac: set_qw_mac {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap &tog_on QWERTY &tog_off LINUX &tog_off FUN &tog_off MEDIA>;
+        };
     };
     behaviors {
+        tog_on: toggle_layer_on_only {
+            compatible = "zmk,behavior-toggle-layer";
+            #binding-cells = <1>;
+            toggle-mode = "on";
+        };
+        tog_off: toggle_layer_off_only {
+            compatible = "zmk,behavior-toggle-layer";
+            #binding-cells = <1>;
+            toggle-mode = "off";
+        };
         td_caps: tap_dance_caps_word {
             compatible = "zmk,behavior-tap-dance";
             label = "TD_CAPS_WORD";
@@ -107,21 +183,12 @@
     keymap {
         compatible = "zmk,keymap";
 
-        /**
-         * Base layer MacOS
-         */
-        base_layer_mac {
-            label = "base_mac";
-            bindings = <
-   &none &kp SEMI    &kp COMMA   &kp DOT      &kp P        &kp Y                &kp F &kp G        &kp C        &kp R       &kp L       &none
-   &none &ptp LGUI A &ptp LALT O &ptp LCTRL E &ptp LSHFT U &kp I                &kp D &ptp LSHFT H &ptp RCTRL T &ptp RALT N &ptp RGUI S &none
-   &none &kp SQT     &kp Q       &kp J        &kp K        &kp X                &kp B &kp M        &kp W        &kp V       &kp Z       &none
-                            &hyper &lphp NAV_MAC SPACE &lphp MACRO_MAC RET    &td_caps &mo SYM &hyper
-            >;
-        };
+/**==========================================================================*/
+/**========================= BASE LAYER + OVERLAYS ==========================*/
+/**==========================================================================*/
 
         /**
-         * Base layer
+         * Base DVORAK layer (MacOS)
          */
         base_layer {
             label = "base";
@@ -129,33 +196,63 @@
    &none &kp SEMI    &kp COMMA   &kp DOT      &kp P        &kp Y                &kp F &kp G        &kp C        &kp R       &kp L       &none
    &none &ptp LGUI A &ptp LALT O &ptp LCTRL E &ptp LSHFT U &kp I                &kp D &ptp LSHFT H &ptp RCTRL T &ptp RALT N &ptp RGUI S &none
    &none &kp SQT     &kp Q       &kp J        &kp K        &kp X                &kp B &kp M        &kp W        &kp V       &kp Z       &none
-                            &kp LCTRL &lphp NAV SPACE &lphp MACRO RET      &td_caps &mo SYM &kp RGUI
+                            &hyper &lphp NAV SPACE &lphp MACRO RET         &td_caps &mo SYM &hyper
             >;
         };
 
         /**
-         * Navigation layer
+         * QWERTY overlay: letters only, everything else falls through
+         */
+        qwerty_layer {
+            label = "qwerty";
+            bindings = <
+   &trans &kp Q       &kp W       &kp E        &kp R        &kp T                &kp Y &kp U        &kp I        &kp O       &kp P          &trans
+   &trans &ptp LGUI A &ptp LALT S &ptp LCTRL D &ptp LSHFT F &kp G                &kp H &ptp LSHFT J &ptp RCTRL K &ptp RALT L &ptp RGUI SEMI &trans
+   &trans &kp Z       &kp X       &kp C        &kp V        &kp B                &kp N &kp M        &kp COMMA    &kp DOT     &kp SQT        &trans
+                                  &trans &trans &trans                 &trans &trans &trans
+            >;
+        };
+
+        /**
+         * Linux overlay: only keys that differ from MacOS
+         */
+        linux_layer {
+            label = "linux";
+            bindings = <
+   &trans &trans &trans &trans &trans &trans                 &trans &trans &trans &trans &trans &trans
+   &trans &trans &trans &trans &trans &trans                 &trans &trans &trans &trans &trans &trans
+   &trans &trans &trans &trans &trans &trans                 &trans &trans &trans &trans &trans &trans
+                                  &kp LCTRL &trans &trans    &trans &trans &kp RGUI
+            >;
+        };
+
+/**==========================================================================*/
+/**======================= END BASE LAYER + OVERLAYS ========================*/
+/**==========================================================================*/
+
+        /**
+         * Navigation layer (MacOS)
          */
         nav_layer {
             label = "nav";
             bindings = <
-   &none &php LALT TAB  &kp W     &kp E     &kp R     &kp T         &kp PG_UP &kp BSPC &kp UP   &kp DEL   &trans &none
-   &none &php LCTRL ESC &kp LC(A) &kp D     &kp F     &to FUN       &kp PG_DN &kp LEFT &kp DOWN &kp RIGHT &none  &none
-   &none &kp LSHFT      &kp LC(X) &kp LC(C) &kp LC(V) &kp BSPC      &kp INS  &trans   &trans   &trans    &trans &none
+   &none &php LALT TAB     &kp W     &kp E     &kp R     &kp T          &kp PG_UP &kp BSPC &kp UP   &kp DEL   &trans &none
+   &none &php LGUI ESC     &kp LG(A) &kp D     &kp F     &tog_on FUN    &kp PG_DN &kp LEFT &kp DOWN &kp RIGHT &none  &none
+   &none &php LSHIFT LG(Z) &kp LG(X) &kp LG(C) &kp LG(V) &kp BSPC       &kp INS  &trans   &trans   &trans    &trans &none
                                       &trans &trans &trans   &trans &trans &trans
             >;
         };
 
         /**
-         * Navigation layer MacOS
+         * Macro layer (MacOS)
          */
-        nav_layer_mac {
-            label = "nav_mac";
+        macro_layer {
+            label = "macro";
             bindings = <
-   &none &php LALT TAB     &kp W     &kp E     &kp R     &kp T          &kp PG_UP &kp BSPC &kp UP   &kp DEL   &trans &none
-   &none &php LGUI ESC     &kp LG(A) &kp D     &kp F     &to FUN_MAC    &kp PG_DN &kp LEFT &kp DOWN &kp RIGHT &none  &none
-   &none &php LSHIFT LG(Z) &kp LG(X) &kp LG(C) &kp LG(V) &kp BSPC       &kp INS  &trans   &trans   &trans    &trans &none
-                                      &trans &trans &trans   &trans &trans &trans
+   &none &kp LG(N1) &kp LG(N2) &kp LG(N3) &kp LG(N4) &kp LG(N5)       &kp LG(N6) &kp LG(N7) &kp LG(N8) &kp LG(N9) &kp LG(N0) &none
+   &none &kp LA(N1) &kp LA(N2) &kp LA(N3) &kp LA(N4) &kp LA(N5)       &kp LA(N6) &kp LA(N7) &kp LA(N8) &kp LA(N9) &kp LA(N0) &none
+   &none &php LSHIFT LC(Z) &kp LC(X) &kp LC(C) &kp LC(V) &kp LG(S)    &none      &none      &none      &none      &none      &none
+                                            &trans &trans &trans    &trans &trans &trans
             >;
         };
 
@@ -168,72 +265,20 @@
    &none &kp F1 &kp F2  &kp F3  &kp F4  &kp PSCRN             &trans &trans    &trans    &trans   &trans    &none
    &none &kp F5 &kp F6  &kp F7  &kp F8  &kp SLCK              &trans &kp RSHFT &kp RCTRL &kp RALT &kp RGUI  &none
    &none &kp F9 &kp F10 &kp F11 &kp F12 &kp PAUSE_BREAK       &trans &trans    &trans    &trans   &trans    &none
-                                  &trans &to BASE &trans    &trans &to MEDIA &trans
+                                  &trans &home &trans    &trans &fun_to_media &trans
             >;
         };
 
         /**
-         * Function layer MacOS
-         */
-        fun_layer_mac {
-            label = "fun_mac";
-            bindings = <
-   &none &kp F1 &kp F2  &kp F3  &kp F4  &kp PSCRN             &trans &trans    &trans    &trans   &trans    &none
-   &none &kp F5 &kp F6  &kp F7  &kp F8  &kp SLCK              &trans &kp RSHFT &kp RCTRL &kp RALT &kp RGUI  &none
-   &none &kp F9 &kp F10 &kp F11 &kp F12 &kp PAUSE_BREAK       &trans &trans    &trans    &trans   &trans    &none
-                              &trans &to BASE_MAC &trans    &trans &to MEDIA_MAC &trans
-            >;
-        };
-
-        /**
-         * Macro layer
-         */
-        macro_layer {
-            label = "macro";
-            bindings = <
-   &none &kp LC(N1) &kp LC(N2) &kp LC(N3) &kp LC(N4) &kp LC(N5)        &kp LC(N6) &kp LC(N7) &kp LC(N8) &kp LC(N9) &kp LC(N0) &none
-   &none &kp LG(N1) &kp LG(N2) &kp LG(N3) &kp LG(N4) &kp LG(N5)        &kp LG(N6) &kp LG(N7) &kp LG(N8) &kp LG(N9) &kp LG(N0) &none
-   &none &kp LC(Z)  &kp LC(X)  &kp LC(C)  &kp LC(V)  &kp LC(S)         &none      &none      &none      &none      &none      &none
-                                            &trans &trans &trans    &trans &trans &trans
-            >;
-        };
-
-        /**
-         * Macro layer MacOS
-         */
-        macro_layer_mac {
-            label = "macro_mac";
-            bindings = <
-   &none &kp LG(N1) &kp LG(N2) &kp LG(N3) &kp LG(N4) &kp LG(N5)       &kp LG(N6) &kp LG(N7) &kp LG(N8) &kp LG(N9) &kp LG(N0) &none
-   &none &kp LA(N1) &kp LA(N2) &kp LA(N3) &kp LA(N4) &kp LA(N5)       &kp LA(N6) &kp LA(N7) &kp LA(N8) &kp LA(N9) &kp LA(N0) &none
-   &none &php LSHIFT LC(Z) &kp LC(X) &kp LC(C) &kp LC(V) &kp LG(S)    &none      &none      &none      &none      &none      &none
-                                            &trans &trans &trans    &trans &trans &trans
-            >;
-        };
-
-        /**
-         * Media layer
+         * Media layer. Row 2 left picks OS + layout.
          */
         media_layer {
             label = "media";
             bindings = <
-   &none &bt BT_SEL 0     &bt BT_SEL 1      &bt BT_SEL 2 &bt BT_SEL 3 &bt BT_SEL 4    &kp C_BRI_UP &trans     &trans       &trans       &trans &none
-   &none &to BASE         &to BASE_MAC      &trans       &trans       &trans          &kp C_BRI_DN &kp C_MUTE &kp C_VOL_DN &kp C_VOL_UP &trans &none
-   &none &ext_power EP_ON &ext_power EP_OFF &out OUT_USB &out OUT_BLE &bt BT_CLR      &trans       &kp C_PREV &kp C_PP     &kp C_NEXT   &none  &none
-                                                         &trans &to BASE &trans    &trans &to FUN &trans
-            >;
-        };
-
-        /**
-         * Media layer MacOS
-         */
-        media_layer_mac {
-            label = "media_mac";
-            bindings = <
-   &none &bt BT_SEL 0     &bt BT_SEL 1      &bt BT_SEL 2 &bt BT_SEL 3 &bt BT_SEL 4    &kp C_BRI_UP &trans     &trans       &trans       &trans &none
-   &none &to BASE         &to BASE_MAC      &trans       &trans       &trans          &kp C_BRI_DN &kp C_MUTE &kp C_VOL_DN &kp C_VOL_UP &trans &none
-   &none &ext_power EP_ON &ext_power EP_OFF &out OUT_USB &out OUT_BLE &bt BT_CLR      &trans       &kp C_PREV &kp C_PP     &kp C_NEXT   &none  &none
-                                                       &trans &to BASE_MAC &trans    &trans &to FUN_MAC &trans
+   &none &bt BT_SEL 0     &bt BT_SEL 1      &bt BT_SEL 2 &bt BT_SEL 3   &bt BT_SEL 4    &kp C_BRI_UP &trans     &trans       &trans       &trans &none
+   &none &set_dv_lin      &set_qw_lin       &set_dv_mac  &set_qw_mac    &trans          &kp C_BRI_DN &kp C_MUTE &kp C_VOL_DN &kp C_VOL_UP &trans &none
+   &none &ext_power EP_ON &ext_power EP_OFF &out OUT_USB &out OUT_BLE   &bt BT_CLR      &trans       &kp C_PREV &kp C_PP     &kp C_NEXT   &none  &none
+                                                         &trans &home &trans    &trans &media_to_fun &trans
             >;
         };
 
@@ -247,6 +292,36 @@
    &none &kp PLUS  &kp LBKT &kp LBRC &kp LPAR  &kp AMPS       &kp EQUAL &kp RPAR &kp RBRC  &kp RBKT &kp MINUS &none
    &none &kp GRAVE &kp HASH &kp DLLR &kp CARET &kp AT         &kp EXCL  &kp STAR &kp PRCNT &kp FSLH &kp BSLH  &none
                                     &trans &trans &trans   &trans &trans &trans
+            >;
+        };
+
+/**==========================================================================*/
+/**=================== CONDITIONAL LAYERS (NAV/MACRO + LINUX)=================*/
+/**==========================================================================*/
+
+        /**
+         * Navigation layer Linux (auto: NAV + LINUX)
+         */
+        nav_layer_linux {
+            label = "nav_linux";
+            bindings = <
+   &none &php LALT TAB  &kp W     &kp E     &kp R     &kp T         &kp PG_UP &kp BSPC &kp UP   &kp DEL   &trans &none
+   &none &php LCTRL ESC &kp LC(A) &kp D     &kp F     &tog_on FUN   &kp PG_DN &kp LEFT &kp DOWN &kp RIGHT &none  &none
+   &none &kp LSHFT      &kp LC(X) &kp LC(C) &kp LC(V) &kp BSPC      &kp INS  &trans   &trans   &trans    &trans &none
+                                      &trans &trans &trans   &trans &trans &trans
+            >;
+        };
+
+        /**
+         * Macro layer Linux (auto: MACRO + LINUX)
+         */
+        macro_layer_linux {
+            label = "macro_linux";
+            bindings = <
+   &none &kp LC(N1) &kp LC(N2) &kp LC(N3) &kp LC(N4) &kp LC(N5)        &kp LC(N6) &kp LC(N7) &kp LC(N8) &kp LC(N9) &kp LC(N0) &none
+   &none &kp LG(N1) &kp LG(N2) &kp LG(N3) &kp LG(N4) &kp LG(N5)        &kp LG(N6) &kp LG(N7) &kp LG(N8) &kp LG(N9) &kp LG(N0) &none
+   &none &kp LC(Z)  &kp LC(X)  &kp LC(C)  &kp LC(V)  &kp LC(S)         &none      &none      &none      &none      &none      &none
+                                            &trans &trans &trans    &trans &trans &trans
             >;
         };
     };
